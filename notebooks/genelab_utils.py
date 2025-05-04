@@ -217,7 +217,7 @@ def download_data_files(assays, file_types, filters, reset=False):
                 # Get filename and URL for each dataset and download it
                 datafile_info = get_file_info(response.json(), file_type)
                 for info in datafile_info:
-                    filename = info["filename"]
+                    filename = identifier + "_" + info["filename"]
                     file_url = info["url"]
                     print(file_url)
                     success = download_data_file(file_url, filename, filter_func, DATASET_PATH)
