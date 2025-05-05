@@ -82,8 +82,9 @@ def validate_kg_metadata():
 
 def get_processed_datasets():
     metadata = get_info()
-    metadata = filter_by_gl_processed(metadata)
-    metadata = add_sample_counts(metadata)
+    #metadata = filter_by_gl_processed(metadata)
+    #metadata = add_sample_counts(metadata)
+    metadata = metadata.drop_duplicates(subset=['identifier','assay_name']);
     return metadata
 
 
@@ -109,6 +110,7 @@ def get_info():
         # "&" "format.header.multi" # you'd use this to break up the header into two lines for the "legacy" format
         # "&" "format.header.mark" # you'd use this to prepend "#" to header lines for the "legacy" format
     )
+    print(quote(url, safe=":/=?&"))
     metadata = pd.read_csv(quote(url, safe=":/=?&"), na_filter=False)
 
     # Simplify column names
@@ -119,6 +121,7 @@ def get_info():
             "investigation.study assays.study assay technology type": "technology",
             "id.assay name": "assay_name",
             "study.characteristics.material type": "material",
+            "id.sample name": "sample_name",
         },
         inplace=True,
     )
@@ -171,11 +174,15 @@ def add_sample_counts(metadata):
     )  # just moving it from the last position to where it belongs
     return per_sample_counts.sort_values(by=["identifier", "assay_name"])
 
+def filter_by_study(metadata, ids):
+    return metadata[
+                metadata["identifier"].str.lower().isin([x.lower() for x in ids])
+            ].copy()
 
 def filter_by_technology_type(metadata, technology_types):
     return metadata[
-        metadata["technology"].str.lower().isin([x.lower() for x in technology_types])
-    ].copy()
+                metadata["technology"].str.lower().isin([x.lower() for x in technology_types])
+            ].copy()
 
 
 def filter_by_organism(metadata, taxids):
@@ -198,7 +205,8 @@ def download_data_files(assays, file_types, filters, reset=False):
         technology = row["technology"]
 
         file_type = file_types.get(technology, None)
-        filter_func = filters.get(file_type, None)
+        #filter_func = filters.get(file_type, None)
+        filter_func = filters.get('trivial_filter', None)
 
         if file_type:
             url = os.path.join(DATASET_URL, identifier, "files")
@@ -209,9 +217,9 @@ def download_data_files(assays, file_types, filters, reset=False):
                 # Get filename and URL for each dataset and download it
                 datafile_info = get_file_info(response.json(), file_type)
                 for info in datafile_info:
-                    filename = info["filename"]
+                    filename = identifier + "_" + info["filename"]
                     file_url = info["url"]
-
+                    print(file_url)
                     success = download_data_file(file_url, filename, filter_func, DATASET_PATH)
                     time.sleep(0.1)
                     if not success:
@@ -262,6 +270,7 @@ def download_data_file(url, filename, filter_func, dataset_path):
             # Load CSV content into DataFrame
             data = pd.read_csv(StringIO(response.text), low_memory=False)
 
+            filtered_data = None
             # Reduce the size of the data file by applying a filter function
             if filter_func is not None:
                 filtered_data = filter_func(data)
